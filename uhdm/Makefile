@@ -4,17 +4,16 @@ all::
 clean::
 	@true
 
-prep: .uhdm-integration .ibex .cmake .surelog .uhdm .yosys
+prep: .uhdm-integration .ibex .cmake .surelog .uhdm .yosys .unisim
 
-.ibex:
-	(cd $(PWD)/.. && git submodule update --init --recursive ibex) && touch $@
-
-IBEX_RTL = \
-	../ibex/rtl/ibex_pkg.sv \
-	../ibex/rtl/ibex_register_file_fpga.sv \
-	../ibex/rtl/ibex_counter.sv \
-	../ibex/rtl/ibex_fetch_fifo.sv \
-	../ibex/rtl/ibex_load_store_unit.sv \
+#
+# Generates EDIF
+#
+#	../ibex/rtl/ibex_register_file_fpga.sv
+#	../ibex/rtl/ibex_pkg.sv \
+#	../ibex/rtl/ibex_counter.sv \
+#	../ibex/rtl/ibex_fetch_fifo.sv \
+#	../ibex/rtl/ibex_load_store_unit.sv \
 
 #
 # Fails because of unsupported features in Yosys
@@ -45,22 +44,50 @@ IBEX_RTL = \
 #	../ibex/rtl/ibex_tracer.sv
 #
 
-ibex-uhdm-edif:
-	PATH="$(PWD)/uhdm-integration/image/bin:$$PATH" \
-		surelog -parse -sverilog \
-		-I../ibex/vendor/lowrisc_ip/prim/rtl \
-		$(IBEX_RTL) && \
-	$(PWD)/uhdm-integration/yosys/yosys \
-		-p 'read_uhdm slpp_all/surelog.uhdm' \
-		-p 'synth_xilinx -iopad -family xc7' \
-		-p 'write_verilog -nodec -nohex -noattr top.premap.v' \
-		-p 'write_edif -pvector bra top.edif'
+ibex-reg-file-tb:
+		PATH="$(PWD)/uhdm-integration/image/bin:$$PATH" \
+			surelog -parse -sverilog \
+			-I../ibex/vendor/lowrisc_ip/prim/rtl \
+			../ibex/rtl/ibex_register_file_fpga.sv \
+	&& \
+		$(PWD)/uhdm-integration/yosys/yosys \
+			-p 'read_uhdm slpp_all/surelog.uhdm' \
+			-p 'synth_xilinx -iopad -family xc7' \
+			-p 'write_verilog -nodec -nohex -noattr top.premap.v' \
+			-p 'write_edif -pvector bra top.edif' \
+	&& \
+		iverilog -g2005-sv \
+			-s sim -o sim top.premap.v tb.sv \
+			unisim/verilog/src/glbl.v \
+			unisim/verilog/src/unisims/GND.v \
+			unisim/verilog/src/unisims/VCC.v  \
+			unisim/verilog/src/unisims/BUFG.v \
+			unisim/verilog/src/unisims/FDRE.v \
+			unisim/verilog/src/unisims/IBUF.v \
+			unisim/verilog/src/unisims/OBUF.v \
+			unisim/verilog/src/unisims/LUT6.v \
+			unisim/verilog/src/unisims/LUT5.v \
+			unisim/verilog/src/unisims/LUT1.v \
+			unisim/verilog/src/unisims/LUT2.v \
+			unisim/verilog/src/unisims/MUXF7.v \
+	&& \
+		vvp sim
 
 # ---------------------------------- UHDM ----------------------------------
 .uhdm-integration:
 	git clone https://github.com/alainmarcel/uhdm-integration.git \
 		uhdm-integration && touch $@
 # ---------------------------------- UHDM ----------------------------------
+
+# ---------------------------------- IBEX ----------------------------------
+.ibex:
+	(cd $(PWD)/.. && git submodule update --init --recursive ibex) && touch $@
+# ---------------------------------- IBEX ----------------------------------
+
+# ---------------------------------- UNISIM --------------------------------
+.unisim:
+	git clone https://github.com/Xilinx/XilinxUnisimLibrary.git unisim && touch $@
+# ---------------------------------- UNISIM --------------------------------
 
 # ---------------------------------- CMAKE ---------------------------------
 CMAKE_VERSION = 3.18.1
